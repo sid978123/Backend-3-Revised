@@ -6,6 +6,8 @@ import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import jwt from "jsonwebtoken";
+import { RefreshCcw } from "lucide-react";
 
 /*steps 
  first  -> user will register with    Fullname , email , username , password , avatar , coverImage ,
@@ -172,4 +174,74 @@ const logoutUser = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, "user loggedout successfully"));
 });
 
-export { regitsterUser, loginUser, logoutUser };
+const refAccessToken = asyncHandler(async (req, res) => {
+  const refreshToken = req.cookies?.refreshToken;
+  if (!refreshToken) {
+    throw new ApiError(401, "Unauthorised request");
+  }
+  const decodeToken = jwt.verify(
+    refreshToken,
+    process.env.REFRESH_TOKEN_SECRET
+  );
+  const user = await User.findById(decodeToken._id);
+  if (!user) {
+    throw new ApiError(403, "Invalid Refresh token");
+  }
+
+  if (!decodeToken._id === user._id) {
+    throw new ApiError(404, "invalid decode-user token");
+  }
+
+  const accessToken = await user.generateAccessTokens(user._id);
+  const newRefreshToken = await user.generateRefreshTokens(user._id);
+
+  user.refreshToken = newRefreshToken;
+  await user.save();
+
+  return res
+    .status(200)
+    .cookie("refreshToken", newRefreshToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "strict",
+    })
+    .json(
+      new ApiResponse(200, accessToken, "refresh Token generatted successfully")
+    );
+
+  const changeCurrentPassword = asyncHandler(async (req, res) => {});
+});
+
+const changeCurrentPassword = asyncHandler(async (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  if (
+    [oldPassword, newPassword].some(
+      (field) => typeof field != "string" || field?.trim() === ""
+    )
+  ) {
+    throw new ApiError(400, "All fields are required ");
+  }
+  const user = await User.findById(req.user?._id);
+  if (!user) {
+    throw new ApiError(401, "user not found");
+  }
+  const verifyOldPass = user.isPasswordCorrect(oldPassword);
+  if (!verifyOldPass) {
+    throw new ApiError(401, "invalid credentials  , Password did not match");
+  }
+
+  user.refreshToken = null;
+  await user.save({ validateBeforeSave: false });
+
+  res.status(200).json({
+    message: "Password changed successfully. Please log in again.",
+  });
+});
+
+export {
+  regitsterUser,
+  loginUser,
+  logoutUser,
+  refAccessToken,
+  changeCurrentPassword,
+};
