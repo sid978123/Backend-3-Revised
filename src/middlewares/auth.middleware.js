@@ -1,0 +1,31 @@
+import jwt from "jsonwebtoken";
+import { User } from "../models/user.model.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { ApiError } from "../utils/ApiError.js";
+
+export const verifyJWT = asyncHandler(async (req, res, next) => {
+  try {
+    const token =
+      req.cookies?.accessToken ||
+      req.header("Authorization")?.replace("Bearer ", "");
+
+    if (!token) {
+      throw new ApiError(404, " Unauthorised request , token not found");
+    }
+
+    const decodeToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+    if (!decodeToken) {
+      throw new ApiError("Unauthorised request ");
+    }
+    const user = await User.findByIdAndUpdate(decodeToken._id)?.select(
+      "-password -refreshToken"
+    );
+    if (!user) {
+      throw new ApiError(401, "user not found");
+    }
+    req.user = user;
+    next();
+  } catch (error) {
+    throw new ApiError(401, error?.message || "Invalid accessToken");
+  }
+});

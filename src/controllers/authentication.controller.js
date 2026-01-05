@@ -104,9 +104,7 @@ const loginUser = asyncHandler(async (req, res) => {
   if (!password || !(username || email)) {
     throw new ApiError(404, "All fields are required");
   }
-  const user = await User.findOne({ $or: [{ username }, { email }] }).select(
-    "+password"
-  );
+  const user = await User.findOne({ $or: [{ username }, { email }] });
 
   if (!user) {
     throw new ApiError(402, "Invalid Credentials , user not found");
@@ -144,4 +142,34 @@ const loginUser = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, loggedInUser, "user loggedin successfully"));
 });
 
-export { regitsterUser, loginUser };
+const logoutUser = asyncHandler(async (req, res) => {
+  if (!req.user || !req.user._id) {
+    throw new ApiError(401, "Unauthorized: req.user not set");
+  }
+
+  const userId = req.user._id;
+
+  if (!userId) {
+    throw new ApiError("userId not found");
+  }
+
+  await User.findByIdAndUpdate(
+    userId,
+    {
+      $unset: { refreshToken: "" },
+    },
+    { new: true }
+  );
+
+  const cookieOptions = {
+    httpOnly: true,
+    secure: true,
+  };
+
+  return res
+    .clearCookie("accessToken", cookieOptions)
+    .clearCookie("refreshToken", cookieOptions)
+    .json(new ApiResponse(200, "user loggedout successfully"));
+});
+
+export { regitsterUser, loginUser, logoutUser };
