@@ -17,6 +17,27 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
 
        */
 
+const generateAccessTokenAndRefreshToken = async (userId) => {
+  try {
+    const user = await User.findOne(userId);
+    if (!user) {
+      throw new ApiError(401, "user not found");
+    }
+    const accessToken = user.generateAccessTokens();
+    const refreshToken = user.generateRefreshTokens();
+
+    user.refreshToken = refreshToken;
+    await user.save({ validateBeforeSave: false });
+
+    return { accessToken, refreshToken };
+  } catch (error) {
+    throw new ApiError(
+      404,
+      error || "something went wrong while generating Access and Refresh Tokens"
+    );
+  }
+};
+
 const regitsterUser = asyncHandler(async (req, res) => {
   const { fullName, username, email, password } = req.body;
 
@@ -71,4 +92,56 @@ const regitsterUser = asyncHandler(async (req, res) => {
     .status(200)
     .json(new ApiResponse(200, response, "User registered successfully"));
 });
-export { regitsterUser };
+
+//login user controller ....
+
+const loginUser = asyncHandler(async (req, res) => {
+  const { username, email, password } = req.body;
+  // if([ username,email , password].some((field) => field?.trim() = "" )){
+  //   throw new ApiError(409 , "All fields are required ")
+  // }
+
+  if (!password || !(username || email)) {
+    throw new ApiError(404, "All fields are required");
+  }
+  const user = await User.findOne({ $or: [{ username }, { email }] }).select(
+    "+password"
+  );
+
+  if (!user) {
+    throw new ApiError(402, "Invalid Credentials , user not found");
+  }
+
+  const isValidPassword = await user.isPasswordCorrect(password);
+
+  console.log("password from req:", password);
+  console.log("hashed password:", user?.password);
+
+  if (!isValidPassword) {
+    throw new ApiError(402, "password is not valid");
+  }
+
+  const { accessToken, refreshToken } =
+    await generateAccessTokenAndRefreshToken(user._id);
+
+  const loggedInUser = {
+    _id: user._id,
+    email: user.email,
+    username: user.username,
+    fullName: user.fullName,
+  };
+
+  const cookieOptions = {
+    httpOnly: true,
+    secure: true,
+    semeSite: "strict",
+  };
+
+  return res
+    .status(200)
+    .cookie("accessToken", accessToken, cookieOptions)
+    .cookie("refreshToken", refreshToken, cookieOptions)
+    .json(new ApiResponse(200, loggedInUser, "user loggedin successfully"));
+});
+
+export { regitsterUser, loginUser };

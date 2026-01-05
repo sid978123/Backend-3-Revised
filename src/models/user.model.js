@@ -2,6 +2,8 @@ import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcrypt";
 import { Schema } from "mongoose";
+import next from "next";
+import { ApiError } from "../utils/ApiError.js";
 
 const userSchema = new Schema(
   {
@@ -32,7 +34,6 @@ const userSchema = new Schema(
       required: [true, "password is required"],
       unique: true,
       tirm: true,
-      select: false,
     },
 
     avatar: {
@@ -43,7 +44,7 @@ const userSchema = new Schema(
       type: String,
       default: "",
     },
-    refreshToke: {
+    refreshToken: {
       type: String,
     },
   },
@@ -51,14 +52,25 @@ const userSchema = new Schema(
   { timestamps: true }
 );
 
-userSchema.pre("save", async function () {
-  if (!this.isModified("password")) return;
+userSchema.pre("save", async function (next) {
+  if (!this.isModified("password")) {
+    return next;
+  }
 
   this.password = await bcrypt.hash(this.password, 10);
+  next;
 });
 
-userSchema.methods.isPasswordCorrect = async function (enterPassword) {
-  return await bcrypt.compare(enterPassword, this.password);
+userSchema.methods.isPasswordCorrect = async function (password) {
+  if (!password) {
+    throw new ApiError("Password not provided");
+  }
+
+  if (!this.password) {
+    throw new ApiError("Hashed password missing from user document");
+  }
+
+  return bcrypt.compare(password, this.password);
 };
 
 userSchema.methods.generateAccessTokens = function () {
