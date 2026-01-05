@@ -7,7 +7,6 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import jwt from "jsonwebtoken";
-import { RefreshCcw } from "lucide-react";
 
 /*steps 
  first  -> user will register with    Fullname , email , username , password , avatar , coverImage ,
