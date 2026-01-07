@@ -7,6 +7,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import jwt from "jsonwebtoken";
+import bcrypt from "bcrypt";
 
 /*steps 
  first  -> user will register with    Fullname , email , username , password , avatar , coverImage ,
@@ -220,15 +221,23 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
   ) {
     throw new ApiError(400, "All fields are required ");
   }
+
   const user = await User.findById(req.user?._id);
   if (!user) {
     throw new ApiError(401, "user not found");
   }
-  const verifyOldPass = user.isPasswordCorrect(oldPassword);
-  if (!verifyOldPass) {
-    throw new ApiError(401, "invalid credentials  , Password did not match");
+  const isOldPasswordCorrect = await user.isPasswordCorrect(oldPassword);
+
+  if (!isOldPasswordCorrect) {
+    throw new ApiError(400, "Old password is incorrect");
   }
 
+  const isSamePassword = await user.isPasswordCorrect(newPassword);
+
+  if (isSamePassword) {
+    throw new ApiError(400, "New password must be different from old password");
+  }
+  user.password = newPassword;
   user.refreshToken = null;
   await user.save({ validateBeforeSave: false });
 
